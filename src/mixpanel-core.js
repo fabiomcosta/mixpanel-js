@@ -75,11 +75,6 @@ var HTTP_PROTOCOL = (('https:' === document.location.protocol) ? 'https://' : 'h
     // https://developer.mozilla.org/en-US/docs/DOM/XMLHttpRequest#withCredentials
 var USE_XHR = (window.XMLHttpRequest && 'withCredentials' in new XMLHttpRequest());
 
-    // IE<10 does not support cross-origin XHR's but script tags
-    // with defer won't block window.onload; ENQUEUE_REQUESTS
-    // should only be true for Opera<12
-var ENQUEUE_REQUESTS = !USE_XHR && (userAgent.indexOf('MSIE') === -1) && (userAgent.indexOf('Mozilla') === -1);
-
 /*
  * Module-level globals
  */
@@ -642,7 +637,6 @@ MixpanelLib.prototype._init = function(token, config, name) {
 
     this['_jsc'] = function() {};
 
-    this.__request_queue = [];
     this.__disabled_events = [];
     this._flags = {
         'disable_all_events': false,
@@ -663,13 +657,6 @@ MixpanelLib.prototype._loaded = function() {
     if (this.get_config('track_pageview')) {
         this.track_pageview();
     }
-};
-
-MixpanelLib.prototype._dom_loaded = function() {
-    _.each(this.__request_queue, function(item) {
-        this._send_request.apply(this, item);
-    }, this);
-    delete this.__request_queue;
 };
 
 /**
@@ -707,10 +694,6 @@ MixpanelLib.prototype._prepare_callback = function(callback, data) {
 };
 
 MixpanelLib.prototype._send_request = function(url, data, callback) {
-    if (ENQUEUE_REQUESTS) {
-        this.__request_queue.push(arguments);
-        return;
-    }
 
     // needed to correctly format responses
     var verbose_mode = this.get_config('verbose');
@@ -1839,62 +1822,6 @@ var override_mp_init_func = function() {
     };
 };
 
-var add_dom_loaded_handler = function() {
-    // Cross browser DOM Loaded support
-    function dom_loaded_handler() {
-        // function flag since we only want to execute this once
-        if (dom_loaded_handler.done) { return; }
-        dom_loaded_handler.done = true;
-
-        ENQUEUE_REQUESTS = false;
-
-        _.each(instances, function(inst) {
-            inst._dom_loaded();
-        });
-    }
-
-    function do_scroll_check() {
-        try {
-            document.documentElement.doScroll('left');
-        } catch(e) {
-            setTimeout(do_scroll_check, 1);
-            return;
-        }
-
-        dom_loaded_handler();
-    }
-
-    if (document.addEventListener) {
-        if (document.readyState === 'complete') {
-            // safari 4 can fire the DOMContentLoaded event before loading all
-            // external JS (including this file). you will see some copypasta
-            // on the internet that checks for 'complete' and 'loaded', but
-            // 'loaded' is an IE thing
-            dom_loaded_handler();
-        } else {
-            document.addEventListener('DOMContentLoaded', dom_loaded_handler, false);
-        }
-    } else if (document.attachEvent) {
-        // IE
-        document.attachEvent('onreadystatechange', dom_loaded_handler);
-
-        // check to make sure we arn't in a frame
-        var toplevel = false;
-        try {
-            toplevel = window.frameElement === null;
-        } catch(e) {
-            // noop
-        }
-
-        if (document.documentElement.doScroll && toplevel) {
-            do_scroll_check();
-        }
-    }
-
-    // fallback handler, always will work
-    _.register_event(window, 'load', dom_loaded_handler, true);
-};
-
 var add_dom_event_counting_handlers = function(instance) {
     var name = instance.get_config('name');
 
@@ -1963,8 +1890,6 @@ export function init_from_snippet() {
     _.each(instances, function(instance) {
         instance._loaded();
     });
-
-    add_dom_loaded_handler();
 }
 
 export function init_as_module() {
@@ -1973,7 +1898,6 @@ export function init_as_module() {
 
     override_mp_init_func();
     mixpanel_master['init']();
-    add_dom_loaded_handler();
 
     return mixpanel_master;
 }
