@@ -18,6 +18,7 @@ if (typeof(window) === 'undefined') {
 
 var ArrayProto = Array.prototype,
     ObjProto = Object.prototype,
+    FuncProto = Function.prototype,
     slice = ArrayProto.slice,
     toString = ObjProto.toString,
     hasOwnProperty = ObjProto.hasOwnProperty,
@@ -37,40 +38,21 @@ var _ = {};
 var console = {
     /** @type {function(...[*])} */
     log: function() {
-        if (Config.DEBUG && !_.isUndefined(windowConsole) && windowConsole) {
-            try {
-                windowConsole.log.apply(windowConsole, arguments);
-            } catch (err) {
-                _.each(arguments, function(arg) {
-                    windowConsole.log(arg);
-                });
-            }
+        if (Config.DEBUG && windowConsole && windowConsole.log) {
+            FuncProto.apply.call(windowConsole.log, windowConsole, arguments);
         }
     },
     /** @type {function(...[*])} */
     error: function() {
-        if (Config.DEBUG && !_.isUndefined(windowConsole) && windowConsole) {
-            var args = ['Mixpanel error:'].concat(_.toArray(arguments));
-            try {
-                windowConsole.error.apply(windowConsole, args);
-            } catch (err) {
-                _.each(args, function(arg) {
-                    windowConsole.error(arg);
-                });
-            }
+        if (Config.DEBUG) {
+            console.critical.apply(console, arguments);
         }
     },
     /** @type {function(...[*])} */
     critical: function() {
-        if (!_.isUndefined(windowConsole) && windowConsole) {
+        if (windowConsole && windowConsole.error) {
             var args = ['Mixpanel error:'].concat(_.toArray(arguments));
-            try {
-                windowConsole.error.apply(windowConsole, args);
-            } catch (err) {
-                _.each(args, function(arg) {
-                    windowConsole.error(arg);
-                });
-            }
+            FuncProto.apply.call(windowConsole.error, windowConsole, args);
         }
     }
 };
