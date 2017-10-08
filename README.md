@@ -1,3 +1,7 @@
+[![](http://img.badgesize.io/https://raw.githubusercontent.com/mixpanel/mixpanel-js/master/mixpanel.min.js?label=original_size)](https://raw.githubusercontent.com/mixpanel/mixpanel-js/master/mixpanel.min.js) [![](http://img.badgesize.io/https://raw.githubusercontent.com/mixpanel/mixpanel-js/master/mixpanel.min.js?compression=gzip&label=original_gzip)](https://raw.githubusercontent.com/mixpanel/mixpanel-js/master/mixpanel.min.js)
+
+[![](http://img.badgesize.io/https://raw.githubusercontent.com/fabiomcosta/mixpanel-js/mixpanel-logging-only/mixpanel.min.js?label=fork_size)](https://raw.githubusercontent.com/fabiomcosta/mixpanel-js/mixpanel-logging-only/mixpanel.min.js) [![](http://img.badgesize.io/https://raw.githubusercontent.com/fabiomcosta/mixpanel-js/mixpanel-logging-only/mixpanel.min.js?compression=gzip&label=fork_gzip)](https://raw.githubusercontent.com/fabiomcosta/mixpanel-js/mixpanel-logging-only/mixpanel.min.js)
+
 # Mixpanel JavaScript Library
 The Mixpanel JavaScript Library is a set of methods attached to a global `mixpanel` object
 intended to be used by websites wishing to send data to Mixpanel projects. A full reference
