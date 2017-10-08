@@ -110,156 +110,6 @@ var DEFAULT_CONFIG = {
     'property_blacklist':     []
 };
 
-var DOM_LOADED = false;
-
-/**
- * DomTracker Object
- * @constructor
- */
-var DomTracker = function() {};
-
-// interface
-DomTracker.prototype.create_properties = function() {};
-DomTracker.prototype.event_handler = function() {};
-DomTracker.prototype.after_track_handler = function() {};
-
-DomTracker.prototype.init = function(mixpanel_instance) {
-    this.mp = mixpanel_instance;
-    return this;
-};
-
-/**
- * @param {Object|string} query
- * @param {string} event_name
- * @param {Object=} properties
- * @param {function(...[*])=} user_callback
- */
-DomTracker.prototype.track = function(query, event_name, properties, user_callback) {
-    var that = this;
-    var elements = _.dom_query(query);
-
-    if (elements.length === 0) {
-        console.error('The DOM query (' + query + ') returned 0 elements');
-        return;
-    }
-
-    _.each(elements, function(element) {
-        _.register_event(element, this.override_event, function(e) {
-            var options = {};
-            var props = that.create_properties(properties, this);
-            var timeout = that.mp.get_config('track_links_timeout');
-
-            that.event_handler(e, this, options);
-
-            // in case the mixpanel servers don't get back to us in time
-            window.setTimeout(that.track_callback(user_callback, props, options, true), timeout);
-
-            // fire the tracking event
-            that.mp.track(event_name, props, that.track_callback(user_callback, props, options));
-        });
-    }, this);
-
-    return true;
-};
-
-/**
- * @param {function(...[*])} user_callback
- * @param {Object} props
- * @param {boolean=} timeout_occured
- */
-DomTracker.prototype.track_callback = function(user_callback, props, options, timeout_occured) {
-    timeout_occured = timeout_occured || false;
-    var that = this;
-
-    return function() {
-        // options is referenced from both callbacks, so we can have
-        // a 'lock' of sorts to ensure only one fires
-        if (options.callback_fired) { return; }
-        options.callback_fired = true;
-
-        if (user_callback && user_callback(timeout_occured, props) === false) {
-            // user can prevent the default functionality by
-            // returning false from their callback
-            return;
-        }
-
-        that.after_track_handler(props, options, timeout_occured);
-    };
-};
-
-DomTracker.prototype.create_properties = function(properties, element) {
-    var props;
-
-    if (typeof(properties) === 'function') {
-        props = properties(element);
-    } else {
-        props = _.extend({}, properties);
-    }
-
-    return props;
-};
-
-/**
- * LinkTracker Object
- * @constructor
- * @extends DomTracker
- */
-var LinkTracker = function() {
-    this.override_event = 'click';
-};
-_.inherit(LinkTracker, DomTracker);
-
-LinkTracker.prototype.create_properties = function(properties, element) {
-    var props = LinkTracker.superclass.create_properties.apply(this, arguments);
-
-    if (element.href) { props['url'] = element.href; }
-
-    return props;
-};
-
-LinkTracker.prototype.event_handler = function(evt, element, options) {
-    options.new_tab = (
-        evt.which === 2 ||
-        evt.metaKey ||
-        evt.ctrlKey ||
-        element.target === '_blank'
-    );
-    options.href = element.href;
-
-    if (!options.new_tab) {
-        evt.preventDefault();
-    }
-};
-
-LinkTracker.prototype.after_track_handler = function(props, options) {
-    if (options.new_tab) { return; }
-
-    setTimeout(function() {
-        window.location = options.href;
-    }, 0);
-};
-
-/**
- * FormTracker Object
- * @constructor
- * @extends DomTracker
- */
-var FormTracker = function() {
-    this.override_event = 'submit';
-};
-_.inherit(FormTracker, DomTracker);
-
-FormTracker.prototype.event_handler = function(evt, element, options) {
-    options.element = element;
-    evt.preventDefault();
-};
-
-FormTracker.prototype.after_track_handler = function(props, options) {
-    setTimeout(function() {
-        options.element.submit();
-    }, 0);
-};
-
 /**
  * Mixpanel Persistence Object
  * @constructor
@@ -792,7 +642,6 @@ MixpanelLib.prototype._init = function(token, config, name) {
 
     this['_jsc'] = function() {};
 
-    this.__dom_loaded_queue = [];
     this.__request_queue = [];
     this.__disabled_events = [];
     this._flags = {
@@ -817,29 +666,10 @@ MixpanelLib.prototype._loaded = function() {
 };
 
 MixpanelLib.prototype._dom_loaded = function() {
-    _.each(this.__dom_loaded_queue, function(item) {
-        this._track_dom.apply(this, item);
-    }, this);
     _.each(this.__request_queue, function(item) {
         this._send_request.apply(this, item);
     }, this);
-    delete this.__dom_loaded_queue;
     delete this.__request_queue;
-};
-
-MixpanelLib.prototype._track_dom = function(DomClass, args) {
-    if (this.get_config('img')) {
-        console.error('You can\'t use DOM tracking functions with img = true.');
-        return false;
-    }
-
-    if (!DOM_LOADED) {
-        this.__dom_loaded_queue.push([DomClass, args]);
-        return false;
-    }
-
-    var dt = new DomClass().init(this);
-    return dt.track.apply(dt, args);
 };
 
 /**
@@ -1143,69 +973,6 @@ MixpanelLib.prototype.track_pageview = function(page) {
         page = document.location.href;
     }
     this.track('mp_page_view', _.info.pageviewInfo(page));
-};
-
-/**
- * Track clicks on a set of document elements. Selector must be a
- * valid query. Elements must exist on the page at the time track_links is called.
- *
- * ### Usage:
- *
- *     // track click for link id #nav
- *     mixpanel.track_links('#nav', 'Clicked Nav Link');
- *
- * ### Notes:
- *
- * This function will wait up to 300 ms for the Mixpanel
- * servers to respond. If they have not responded by that time
- * it will head to the link without ensuring that your event
- * has been tracked.  To configure this timeout please see the
- * set_config() documentation below.
- *
- * If you pass a function in as the properties argument, the
- * function will receive the DOMElement that triggered the
- * event as an argument.  You are expected to return an object
- * from the function; any properties defined on this object
- * will be sent to mixpanel as event properties.
- *
- * @type {Function}
- * @param {Object|String} query A valid DOM query, element or jQuery-esque list
- * @param {String} event_name The name of the event to track
- * @param {Object|Function} [properties] A properties object or function that returns a dictionary of properties when passed a DOMElement
- */
-MixpanelLib.prototype.track_links = function() {
-    return this._track_dom.call(this, LinkTracker, arguments);
-};
-
-/**
- * Track form submissions. Selector must be a valid query.
- *
- * ### Usage:
- *
- *     // track submission for form id 'register'
- *     mixpanel.track_forms('#register', 'Created Account');
- *
- * ### Notes:
- *
- * This function will wait up to 300 ms for the mixpanel
- * servers to respond, if they have not responded by that time
- * it will head to the link without ensuring that your event
- * has been tracked.  To configure this timeout please see the
- * set_config() documentation below.
- *
- * If you pass a function in as the properties argument, the
- * function will receive the DOMElement that triggered the
- * event as an argument.  You are expected to return an object
- * from the function; any properties defined on this object
- * will be sent to mixpanel as event properties.
- *
- * @type {Function}
- * @param {Object|String} query A valid DOM query, element or jQuery-esque list
- * @param {String} event_name The name of the event to track
- * @param {Object|Function} [properties] This can be a set of properties, or a function that returns a set of properties after being passed a DOMElement
- */
-MixpanelLib.prototype.track_forms = function() {
-    return this._track_dom.call(this, FormTracker, arguments);
 };
 
 /**
@@ -1995,8 +1762,6 @@ MixpanelLib.prototype['reset']                           = MixpanelLib.prototype
 MixpanelLib.prototype['disable']                         = MixpanelLib.prototype.disable;
 MixpanelLib.prototype['time_event']                      = MixpanelLib.prototype.time_event;
 MixpanelLib.prototype['track']                           = MixpanelLib.prototype.track;
-MixpanelLib.prototype['track_links']                     = MixpanelLib.prototype.track_links;
-MixpanelLib.prototype['track_forms']                     = MixpanelLib.prototype.track_forms;
 MixpanelLib.prototype['track_pageview']                  = MixpanelLib.prototype.track_pageview;
 MixpanelLib.prototype['register']                        = MixpanelLib.prototype.register;
 MixpanelLib.prototype['register_once']                   = MixpanelLib.prototype.register_once;
@@ -2081,7 +1846,6 @@ var add_dom_loaded_handler = function() {
         if (dom_loaded_handler.done) { return; }
         dom_loaded_handler.done = true;
 
-        DOM_LOADED = true;
         ENQUEUE_REQUESTS = false;
 
         _.each(instances, function(inst) {

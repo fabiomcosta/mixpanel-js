@@ -635,15 +635,6 @@ _.register_event = (function() {
     return register_event;
 })();
 
-_.dom_query = function(query) {
-    if (_.isElement(query)) {
-        return [query];
-    } else if (_.isObject(query) && !_.isUndefined(query.length)) {
-        return query;
-    }
-    return _.toArray(document.querySelectorAll(query));
-};
-
 _.info = {
     campaignParams: function() {
         var campaign_keywords = 'utm_source utm_medium utm_campaign utm_content utm_term'.split(' '),
